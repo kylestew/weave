@@ -1,25 +1,84 @@
 #include "weave.h"
 
+// --- Pattern Libraries ---
+// Each threading entry is a repeating unit of shaft assignments (x-axis)
+// that tiles across 64 warp ends. The numbers are shaft indices (0–3).
+const ThreadingEntry THREADING_LIBRARY[THREADING_COUNT] = {
+    {"Straight draw",       {0,1,2,3},                                     4},
+    {"Point twill",         {0,1,2,3,2,1},                                 6},
+    {"Rosepath",            {0,1,2,3,2,1,0,3},                             8},
+    {"Broken twill",        {0,1,2,3,1,0,3,2},                             8},
+    {"Extended point",      {0,1,2,2,3,3,2,2,1,0},                        10},
+    {"Monk's belt",         {0,1,0,1,2,3,2,3},                             8},
+    {"M's and O's",         {0,1,0,1,2,3,2,3},                             8},
+    {"Overshot",            {0,1,0,2,1,2,1,3,0,3,0,2,1,2,1,0},           16},
+    {"Huck lace",           {0,1,0,2,3,2},                                 6},
+    {"Advancing twill",     {0,1,2,3,1,2,3,0},                             8},
+    {"Crepe",               {0,2,1,3,2,0,3,1},                             8},
+    {"Undulating twill",    {0,1,2,3,2,3,0,1,0,1,2,3},                   12},
+};
+
+// Each treadling entry is a repeating sequence of pedal presses (y-axis).
+// The numbers are treadle indices (0–3), one per pick (row).
+const TreadlingEntry TREADLING_LIBRARY[TREADLING_SEQ_COUNT] = {
+    {"Straight",    {0,1,2,3},                 4},
+    {"Reverse",     {3,2,1,0},                 4},
+    {"Point",       {0,1,2,3,2,1},             6},
+    {"Alternating", {0,2,1,3},                 4},
+    {"Rose",        {0,1,2,3,2,1,0,3},         8},
+    {"Extended",    {0,0,1,1,2,2,3,3},         8},
+    {"Syncopated",  {0,1,0,2,0,3},             6},
+    {"Doubled",     {0,1,2,3,0,1,2,3},         8},
+    {"Offset",      {0,2,1,3,2,0,3,1},         8},
+};
+
+// Starting tie-ups: each is a 4×4 matrix [treadle][shaft].
+// 1 = pressing that pedal raises that shaft frame.
+const uint8_t TIEUP_LIBRARY[TIEUP_COUNT][TREADLES][SHAFTS] = {
+    // 2/2 Twill: two up, two down, shifting — produces diagonal lines
+    {{1,1,0,0}, {0,1,1,0}, {0,0,1,1}, {1,0,0,1}},
+    // Tabby (plain weave): over one, under one, alternating
+    {{1,0,1,0}, {0,1,0,1}, {1,0,1,0}, {0,1,0,1}},
+    // Point Twill: twill that reverses direction — produces chevrons/diamonds
+    {{1,1,0,0}, {1,1,1,0}, {0,1,1,1}, {0,0,1,1}},
+};
+
+// --- RNG (xorshift32) ---
+
+uint32_t rng_next(Loom *loom) {
+    uint32_t x = loom->rng_state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    loom->rng_state = x;
+    return x;
+}
+
+int rng_range(Loom *loom, int min, int max) {
+    return min + (int)(rng_next(loom) % (uint32_t)(max - min + 1));
+}
+
+// --- Initialization ---
+
 void loom_init(Loom *loom, uint32_t seed) {
-    (void)seed; // will be used for RNG in Step 5
     memset(loom, 0, sizeof(Loom));
+    loom->rng_state = seed ? seed : 1;
 
-    // Straight draw threading: each warp end cycles through shafts 0,1,2,3
+    // Random starting threading from library
+    int ti = rng_range(loom, 0, THREADING_COUNT - 1);
+    const ThreadingEntry *te = &THREADING_LIBRARY[ti];
     for (int i = 0; i < WARP_ENDS; i++)
-        loom->threading.shaft[i] = i % SHAFTS;
+        loom->threading.shaft[i] = te->pattern[i % te->length];
 
-    // 2/2 Twill tie-up: two shafts raised per pedal, shifting diagonally
-    uint8_t twill[4][4] = {
-        {1,1,0,0}, {0,1,1,0}, {0,0,1,1}, {1,0,0,1}
-    };
-    memcpy(loom->tieup.matrix, twill, sizeof(twill));
+    // Random starting tie-up from library
+    int ui = rng_range(loom, 0, TIEUP_COUNT - 1);
+    memcpy(loom->tieup.matrix, TIEUP_LIBRARY[ui], sizeof(loom->tieup.matrix));
 
-    // Straight treadling: press pedals 0,1,2,3 in order
-    loom->treadling.sequence[0] = 0;
-    loom->treadling.sequence[1] = 1;
-    loom->treadling.sequence[2] = 2;
-    loom->treadling.sequence[3] = 3;
-    loom->treadling.length = 4;
+    // Random starting treadling from library
+    int ri = rng_range(loom, 0, TREADLING_SEQ_COUNT - 1);
+    const TreadlingEntry *re = &TREADLING_LIBRARY[ri];
+    memcpy(loom->treadling.sequence, re->pattern, re->length);
+    loom->treadling.length = re->length;
     loom->treadling.direction = 1;
 
     // Palette: indigo + natural (undyed cotton)
@@ -35,12 +94,12 @@ void loom_init(Loom *loom, uint32_t seed) {
     loom->grid_head = 0;
     loom->pick = 0;
 
-    // Schedule first evolution events (hardcoded for now, randomized in Step 5)
-    loom->next_threading_change   = 200;
-    loom->next_tieup_mutation     = 30;
-    loom->next_treadling_change   = 100;
-    loom->next_treadling_rotation = 50;
-    loom->next_weft_color_change  = 20;
+    // Schedule first evolution events at random intervals
+    loom->next_threading_change   = rng_range(loom, 200, 600);
+    loom->next_tieup_mutation     = rng_range(loom, 30, 90);
+    loom->next_treadling_change   = rng_range(loom, 100, 300);
+    loom->next_treadling_rotation = rng_range(loom, 50, 150);
+    loom->next_weft_color_change  = rng_range(loom, 20, 80);
 
     loom->paused = 0;
 }

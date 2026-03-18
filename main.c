@@ -39,11 +39,7 @@ int main(void) {
     Loom loom;
     loom_init(&loom, (uint32_t)time(NULL));
 
-    // Pre-fill the grid so we don't start with a black screen
-    for (int i = 0; i < VISIBLE_ROWS; i++)
-        advance_loom(&loom);
-
-    uint32_t tick_interval_ms = 100; // ~10 rows/sec
+    uint32_t tick_interval_ms = 250; // 4 rows/sec
     uint32_t last_tick = SDL_GetTicks();
 
     int running = 1;

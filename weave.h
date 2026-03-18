@@ -18,6 +18,32 @@
 #define MAX_PALETTE  8   // max colors in a palette
 #define MAX_FLOAT    7   // max consecutive same-state cells before rejection
 
+// Library sizes
+#define MAX_THREADING_REPEAT 16  // longest threading pattern repeat
+#define THREADING_COUNT      12  // number of classic threading patterns
+#define TREADLING_SEQ_COUNT  9   // number of classic treadling sequences
+#define TIEUP_COUNT          3   // number of starting tie-up presets
+
+// Threading library entry: a named repeating pattern of shaft assignments.
+// The pattern tiles across all 64 warp ends.
+typedef struct {
+    const char *name;
+    uint8_t pattern[MAX_THREADING_REPEAT];  // shaft numbers (0–3)
+    int length;                             // repeat length
+} ThreadingEntry;
+
+// Treadling library entry: a named repeating sequence of treadle (pedal) presses.
+// Cycles for each successive pick (row).
+typedef struct {
+    const char *name;
+    uint8_t pattern[MAX_SEQUENCE];          // treadle numbers (0–3)
+    int length;                             // sequence length
+} TreadlingEntry;
+
+extern const ThreadingEntry THREADING_LIBRARY[THREADING_COUNT];
+extern const TreadlingEntry TREADLING_LIBRARY[TREADLING_SEQ_COUNT];
+extern const uint8_t TIEUP_LIBRARY[TIEUP_COUNT][TREADLES][SHAFTS];
+
 // Threading: which shaft (frame) each vertical warp thread is tied to.
 // This is the x-axis lookup — displayed across the top in draft notation.
 // On a real loom, changing this means physically re-threading every heddle.
@@ -79,10 +105,14 @@ typedef struct {
     uint8_t grid[VISIBLE_ROWS][WARP_ENDS];  // ring buffer of palette indices (the fabric)
     int grid_head;                          // ring buffer write position
 
+    uint32_t rng_state;                     // xorshift PRNG state
+
     int paused;
 } Loom;
 
 void loom_init(Loom *loom, uint32_t seed);
+uint32_t rng_next(Loom *loom);
+int rng_range(Loom *loom, int min, int max);
 
 // Compute drawdown for one cell: returns 1 (warp on top) or 0 (weft on top)
 int drawdown_cell(const Loom *loom, int x);
