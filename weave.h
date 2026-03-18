@@ -18,11 +18,17 @@
 #define MAX_PALETTE  8   // max colors in a palette
 #define MAX_FLOAT    7   // max consecutive same-state cells before rejection
 
-// Library sizes
+typedef struct {
+    uint8_t r, g, b;
+} Color;
+
+// --- Library types and constants ---
+
 #define MAX_THREADING_REPEAT 16  // longest threading pattern repeat
 #define THREADING_COUNT      12  // number of classic threading patterns
 #define TREADLING_SEQ_COUNT  9   // number of classic treadling sequences
 #define TIEUP_COUNT          3   // number of starting tie-up presets
+#define PALETTE_COUNT        5   // number of color palettes
 
 // Threading library entry: a named repeating pattern of shaft assignments.
 // The pattern tiles across all 64 warp ends.
@@ -40,9 +46,19 @@ typedef struct {
     int length;                             // sequence length
 } TreadlingEntry;
 
+// A named color palette — the actual RGB values for the fabric.
+typedef struct {
+    const char *name;
+    Color colors[MAX_PALETTE];
+    int size;
+} PaletteEntry;
+
 extern const ThreadingEntry THREADING_LIBRARY[THREADING_COUNT];
 extern const TreadlingEntry TREADLING_LIBRARY[TREADLING_SEQ_COUNT];
 extern const uint8_t TIEUP_LIBRARY[TIEUP_COUNT][TREADLES][SHAFTS];
+extern const PaletteEntry PALETTE_LIBRARY[PALETTE_COUNT];
+
+// --- Loom component types ---
 
 // Threading: which shaft (frame) each vertical warp thread is tied to.
 // This is the x-axis lookup — displayed across the top in draft notation.
@@ -76,10 +92,6 @@ typedef struct {
     int length;                             // repeat length
 } ColorSett;
 
-typedef struct {
-    uint8_t r, g, b;
-} Color;
-
 // Loom: the complete state of a virtual 4-shaft floor loom.
 // A real floor loom has a frame you sit at with foot pedals below,
 // vertical warp threads strung front-to-back, and a shuttle carrying
@@ -94,6 +106,7 @@ typedef struct {
     uint8_t weft_color_index;               // current weft (horizontal thread) color
     Color palette[MAX_PALETTE];
     int palette_size;
+    int current_palette_index;              // which palette from the library
 
     uint32_t pick;                          // current pick number (pick = one weft pass = one row)
     uint32_t next_threading_change;         // when to re-thread (rare, dramatic)
@@ -122,5 +135,8 @@ uint8_t resolve_color(const Loom *loom, int x, int drawdown);
 
 // Compute one new row of fabric and append to the ring buffer
 void advance_loom(Loom *loom);
+
+// Check all evolution timers and fire any that are due
+void check_evolutions(Loom *loom);
 
 #endif

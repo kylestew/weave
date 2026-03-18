@@ -1,4 +1,5 @@
 #include "weave.h"
+#include <stdio.h>
 
 // --- Pattern Libraries ---
 // Each threading entry is a repeating unit of shaft assignments (x-axis)
@@ -43,6 +44,16 @@ const uint8_t TIEUP_LIBRARY[TIEUP_COUNT][TREADLES][SHAFTS] = {
     {{1,1,0,0}, {1,1,1,0}, {0,1,1,1}, {0,0,1,1}},
 };
 
+// --- Color Palettes ---
+
+const PaletteEntry PALETTE_LIBRARY[PALETTE_COUNT] = {
+    {"Indigo & Natural", {{45,52,94}, {210,195,170}, {80,85,128}, {180,165,140}}, 4},
+    {"Earth",            {{101,67,33}, {181,137,85}, {139,90,43}, {222,199,163}}, 4},
+    {"High Contrast",    {{20,20,20}, {235,235,230}, {180,40,30}, {50,50,55}},    4},
+    {"Ocean",            {{15,30,60}, {40,80,120}, {100,160,180}, {200,220,225}}, 4},
+    {"Forest",           {{25,50,25}, {60,100,45}, {140,160,80}, {200,190,140}},  4},
+};
+
 // --- RNG (xorshift32) ---
 
 uint32_t rng_next(Loom *loom) {
@@ -81,10 +92,11 @@ void loom_init(Loom *loom, uint32_t seed) {
     loom->treadling.length = re->length;
     loom->treadling.direction = 1;
 
-    // Palette: indigo + natural (undyed cotton)
-    loom->palette[0] = (Color){45, 52, 94};    // indigo
-    loom->palette[1] = (Color){210, 195, 170};  // natural
-    loom->palette_size = 2;
+    // Random starting palette from library
+    loom->current_palette_index = rng_range(loom, 0, PALETTE_COUNT - 1);
+    const PaletteEntry *pal = &PALETTE_LIBRARY[loom->current_palette_index];
+    memcpy(loom->palette, pal->colors, sizeof(Color) * pal->size);
+    loom->palette_size = pal->size;
 
     // Solid warp sett (all indigo), weft is natural
     loom->warp_sett.indices[0] = 0;
@@ -141,4 +153,26 @@ void advance_loom(Loom *loom) {
     }
     loom->grid_head = (loom->grid_head + 1) % VISIBLE_ROWS;
     loom->pick++;
+}
+
+// --- Evolution ---
+
+void check_evolutions(Loom *loom) {
+    uint32_t p = loom->pick;
+
+    // Weft color step: cycle the horizontal thread color through the palette.
+    // Creates horizontal banding that interacts with the weave structure.
+    if (p >= loom->next_weft_color_change) {
+        // Step to next color, skipping any that match the dominant warp sett color
+        // (otherwise warp and weft become identical and the pattern disappears)
+        uint8_t warp_dominant = loom->warp_sett.indices[0];
+        uint8_t next = loom->weft_color_index;
+        for (int i = 0; i < loom->palette_size; i++) {
+            next = (next + 1) % loom->palette_size;
+            if (next != warp_dominant) break;
+        }
+        loom->weft_color_index = next;
+        fprintf(stderr, "[pick %u] weft color → %d\n", p, next);
+        loom->next_weft_color_change = p + rng_range(loom, 20, 80);
+    }
 }

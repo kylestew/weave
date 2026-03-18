@@ -490,17 +490,16 @@ loom->treadling.direction = 1;
 
 ## Step 6: Evolution System
 
-The heart of Weave — each tick, check if any evolution events should fire.
+The heart of Weave — each tick, check if any evolution events should fire. Broken into substeps so each event type can be implemented and tested independently.
+
+### Step 6a: check_evolutions scaffold + weft color stepping
+
+The simplest evolution event: step the weft (horizontal thread) color to the next palette entry every 20–80 picks. Also wire up `check_evolutions` in the main loop so all future substeps are automatically active.
 
 **weave.h**:
 
 ```c
 void check_evolutions(Loom *loom);
-void randomize_threading(Loom *loom);
-void mutate_tieup(Loom *loom);
-void evolve_treadling(Loom *loom);
-void rotate_treadling(Loom *loom);
-bool validate_tieup(const Tieup *tieup);
 ```
 
 **weave.c**:
@@ -509,32 +508,178 @@ bool validate_tieup(const Tieup *tieup);
 void check_evolutions(Loom *loom) {
     uint32_t p = loom->pick;
 
-    if (p >= loom->next_threading_change) {
-        randomize_threading(loom);
-        loom->next_threading_change = p + rng_range(loom, 200, 600);
-    }
-
-    if (p >= loom->next_tieup_mutation) {
-        mutate_tieup(loom);
-        loom->next_tieup_mutation = p + rng_range(loom, 30, 90);
-    }
-
-    if (p >= loom->next_treadling_change) {
-        evolve_treadling(loom);
-        loom->next_treadling_change = p + rng_range(loom, 100, 300);
-    }
-
-    if (p >= loom->next_treadling_rotation) {
-        rotate_treadling(loom);
-        loom->next_treadling_rotation = p + rng_range(loom, 50, 150);
-    }
-
+    // Weft color step: cycle the horizontal thread color through the palette
     if (p >= loom->next_weft_color_change) {
         loom->weft_color_index = (loom->weft_color_index + 1) % loom->palette_size;
         loom->next_weft_color_change = p + rng_range(loom, 20, 80);
     }
 }
+```
 
+**main.c** — call `check_evolutions` after `advance_loom`:
+
+```c
+if (!loom.paused) {
+    uint32_t now = SDL_GetTicks();
+    if (now - last_tick >= tick_interval_ms) {
+        advance_loom(&loom);
+        check_evolutions(&loom);
+        last_tick = now;
+    }
+}
+```
+
+**Checkpoint:** You'll see horizontal color banding as the weft color alternates between indigo and natural.
+
+---
+
+### Step 6b: Tie-up mutation
+
+Flip a single bit in the 4×4 tie-up matrix every 30–90 picks. Validate after each flip: reject all-zero rows (pedal raises nothing), all-one rows (no interlacement), and duplicate rows (wasted pedals). Invalid mutations are retried up to 16 times.
+
+**weave.h**:
+
+```c
+void mutate_tieup(Loom *loom);
+bool validate_tieup(const Tieup *tieup);
+```
+
+**weave.c**:
+
+```c
+bool validate_tieup(const Tieup *tieup) {
+    for (int t = 0; t < TREADLES; t++) {
+        int sum = 0;
+        for (int s = 0; s < SHAFTS; s++)
+            sum += tieup->matrix[t][s];
+        if (sum == 0 || sum == SHAFTS) return false;
+    }
+    // Check for duplicate rows
+    for (int a = 0; a < TREADLES; a++)
+        for (int b = a + 1; b < TREADLES; b++)
+            if (memcmp(tieup->matrix[a], tieup->matrix[b], SHAFTS) == 0)
+                return false;
+    return true;
+}
+
+void mutate_tieup(Loom *loom) {
+    for (int attempt = 0; attempt < 16; attempt++) {
+        Tieup trial = loom->tieup;
+        int t = rng_range(loom, 0, TREADLES - 1);
+        int s = rng_range(loom, 0, SHAFTS - 1);
+        trial.matrix[t][s] ^= 1;
+        if (validate_tieup(&trial)) {
+            loom->tieup = trial;
+            return;
+        }
+    }
+}
+```
+
+Add to `check_evolutions`:
+
+```c
+if (p >= loom->next_tieup_mutation) {
+    mutate_tieup(loom);
+    loom->next_tieup_mutation = p + rng_range(loom, 30, 90);
+}
+```
+
+**Checkpoint:** The weave texture gradually morphs — twill drifts toward satin, then something unexpected. Changes are subtle since only one bit flips at a time.
+
+---
+
+### Step 6c: Treadling evolution (replace, reverse, tromp-as-writ) and rotation
+
+Two events on separate timers:
+
+- **Treadling replacement** (every 100–300 picks): swap the entire pedal sequence. Randomly picks one of three actions — replace from library, reverse direction, or tromp-as-writ (copy threading as treadling for symmetrical results).
+- **Treadling rotation** (every 50–150 picks): shift the sequence start by one position (`[0,1,2,3]` → `[1,2,3,0]`), creating a diagonal drift.
+
+**weave.h**:
+
+```c
+void evolve_treadling(Loom *loom);
+void rotate_treadling(Loom *loom);
+```
+
+**weave.c**:
+
+```c
+void evolve_treadling(Loom *loom) {
+    int action = rng_range(loom, 0, 2);
+    switch (action) {
+        case 0: { // Replace from library
+            int ri = rng_range(loom, 0, TREADLING_SEQ_COUNT - 1);
+            memcpy(loom->treadling.sequence, TREADLING_LIBRARY[ri].pattern,
+                   TREADLING_LIBRARY[ri].length);
+            loom->treadling.length = TREADLING_LIBRARY[ri].length;
+            break;
+        }
+        case 1: // Reverse direction
+            loom->treadling.direction *= -1;
+            break;
+        case 2: { // Tromp-as-writ — copy threading pattern into treadling
+            int len = 0;
+            for (int i = 0; i < MAX_SEQUENCE && i < WARP_ENDS; i++) {
+                loom->treadling.sequence[i] = loom->threading.shaft[i];
+                len++;
+                if (i > 0 && loom->threading.shaft[i] == loom->threading.shaft[0]) {
+                    bool repeats = true;
+                    for (int j = 0; j < len && i + j < WARP_ENDS; j++) {
+                        if (loom->threading.shaft[j] != loom->threading.shaft[i + j]) {
+                            repeats = false;
+                            break;
+                        }
+                    }
+                    if (repeats) break;
+                }
+            }
+            loom->treadling.length = len;
+            break;
+        }
+    }
+}
+
+void rotate_treadling(Loom *loom) {
+    uint8_t first = loom->treadling.sequence[0];
+    for (int i = 0; i < loom->treadling.length - 1; i++)
+        loom->treadling.sequence[i] = loom->treadling.sequence[i + 1];
+    loom->treadling.sequence[loom->treadling.length - 1] = first;
+}
+```
+
+Add to `check_evolutions`:
+
+```c
+if (p >= loom->next_treadling_change) {
+    evolve_treadling(loom);
+    loom->next_treadling_change = p + rng_range(loom, 100, 300);
+}
+
+if (p >= loom->next_treadling_rotation) {
+    rotate_treadling(loom);
+    loom->next_treadling_rotation = p + rng_range(loom, 50, 150);
+}
+```
+
+**Checkpoint:** The rhythm of the weave shifts — diagonal drifts from rotation, bigger structural changes from replacement. Direction reversals create mirror/chevron effects.
+
+---
+
+### Step 6d: Threading change + warp sett
+
+The rarest and most dramatic event (every 200–600 picks): pick a new threading from the library, replacing the shaft assignments for all 64 warp ends instantly. Also randomize the warp color sett at the same time, since on a real loom the warp colors are set when you thread up.
+
+**weave.h**:
+
+```c
+void randomize_threading(Loom *loom);
+```
+
+**weave.c**:
+
+```c
 void randomize_threading(Loom *loom) {
     int ti = rng_range(loom, 0, THREADING_COUNT - 1);
     const ThreadingEntry *e = &THREADING_LIBRARY[ti];
@@ -542,7 +687,6 @@ void randomize_threading(Loom *loom) {
         loom->threading.shaft[i] = e->pattern[i % e->length];
 
     // Also change warp sett (aligned with threading per spec)
-    // Cycle to a different sett pattern
     int sett_type = rng_range(loom, 0, 3);
     switch (sett_type) {
         case 0: // Solid
@@ -569,99 +713,18 @@ void randomize_threading(Loom *loom) {
             break;
     }
 }
-
-bool validate_tieup(const Tieup *tieup) {
-    for (int t = 0; t < TREADLES; t++) {
-        int sum = 0;
-        for (int s = 0; s < SHAFTS; s++)
-            sum += tieup->matrix[t][s];
-        if (sum == 0 || sum == SHAFTS) return false; // all-zero or all-one
-    }
-    // Check for duplicate rows
-    for (int a = 0; a < TREADLES; a++)
-        for (int b = a + 1; b < TREADLES; b++)
-            if (memcmp(tieup->matrix[a], tieup->matrix[b], SHAFTS) == 0)
-                return false;
-    return true;
-}
-
-void mutate_tieup(Loom *loom) {
-    // Try up to 16 random mutations, accept first valid one
-    for (int attempt = 0; attempt < 16; attempt++) {
-        Tieup trial = loom->tieup;
-        int t = rng_range(loom, 0, TREADLES - 1);
-        int s = rng_range(loom, 0, SHAFTS - 1);
-        trial.matrix[t][s] ^= 1;
-        if (validate_tieup(&trial)) {
-            loom->tieup = trial;
-            return;
-        }
-    }
-    // All attempts failed — skip this mutation cycle
-}
-
-void evolve_treadling(Loom *loom) {
-    int action = rng_range(loom, 0, 2);
-    switch (action) {
-        case 0: { // Replace from library
-            int ri = rng_range(loom, 0, TREADLING_SEQ_COUNT - 1);
-            memcpy(loom->treadling.sequence, TREADLING_LIBRARY[ri].pattern,
-                   TREADLING_LIBRARY[ri].length);
-            loom->treadling.length = TREADLING_LIBRARY[ri].length;
-            break;
-        }
-        case 1: // Reverse direction
-            loom->treadling.direction *= -1;
-            break;
-        case 2: { // Tromp-as-writ — copy threading pattern into treadling
-            // Find the threading repeat length by scanning for the cycle
-            // Simplification: use first SHAFTS entries of threading as the sequence
-            int len = 0;
-            for (int i = 0; i < MAX_SEQUENCE && i < WARP_ENDS; i++) {
-                loom->treadling.sequence[i] = loom->threading.shaft[i];
-                len++;
-                // Stop at the end of one repeat (heuristic: when we see shaft 0 again after starting)
-                if (i > 0 && loom->threading.shaft[i] == loom->threading.shaft[0]) {
-                    // Check if the pattern from 0..i matches i..2i
-                    bool repeats = true;
-                    for (int j = 0; j < len && i + j < WARP_ENDS; j++) {
-                        if (loom->threading.shaft[j] != loom->threading.shaft[i + j]) {
-                            repeats = false;
-                            break;
-                        }
-                    }
-                    if (repeats) break;
-                }
-            }
-            loom->treadling.length = len;
-            break;
-        }
-    }
-}
-
-void rotate_treadling(Loom *loom) {
-    // Shift starting point by 1
-    uint8_t first = loom->treadling.sequence[0];
-    for (int i = 0; i < loom->treadling.length - 1; i++)
-        loom->treadling.sequence[i] = loom->treadling.sequence[i + 1];
-    loom->treadling.sequence[loom->treadling.length - 1] = first;
-}
 ```
 
-Wire it up in the main loop — call `check_evolutions` after `advance_loom`:
+Add to `check_evolutions`:
 
 ```c
-if (!loom.paused) {
-    uint32_t now = SDL_GetTicks();
-    if (now - last_tick >= tick_interval_ms) {
-        advance_loom(&loom);
-        check_evolutions(&loom);
-        last_tick = now;
-    }
+if (p >= loom->next_threading_change) {
+    randomize_threading(loom);
+    loom->next_threading_change = p + rng_range(loom, 200, 600);
 }
 ```
 
-**Checkpoint:** The fabric now evolves! Threading swaps cause dramatic visual breaks. The tie-up slowly morphs. Treadling rotates and changes. Weft color steps through the palette.
+**Checkpoint:** All five evolution events are now active. The fabric evolves at multiple timescales — slow dramatic threading swaps, moderate treadling shifts, fast tie-up morphing, and rapid weft color banding.
 
 ---
 
@@ -988,20 +1051,20 @@ Clean up, test edge cases, finalize:
 
 ---
 
-## Implementation Order Summary
+## Progress
 
-| Step | What                        | Key Outcome                                    |
-|------|-----------------------------|------------------------------------------------|
-| 1    | Scaffolding                 | Black window renders via SDL2                  |
-| 2    | Data structures + init      | `Loom` struct populated with starting state    |
-| 3    | Drawdown + render           | Static weave pattern visible and scrolling     |
-| 4    | Data libraries              | All threading/treadling/tieup tables defined    |
-| 5    | RNG + randomized init       | Each run starts with different random pattern   |
-| 6    | Evolution system            | Fabric evolves over time — the core experience |
-| 7    | Float validation            | Degenerate mutations rejected                  |
-| 8    | Color palettes              | Multiple palettes, weft color stepping          |
-| 9    | Keyboard controls           | Full interactivity                             |
-| 10   | Debug overlay               | Traditional draft notation in margins          |
-| 11   | Polish                      | Window title, edge cases, final testing        |
-
-Each step produces a compilable, runnable binary. Earlier steps are self-contained so you can stop at any point and have a working (if incomplete) program.
+- [x] Step 1 — Scaffolding (Makefile, SDL2 window)
+- [x] Step 2 — Data structures + Loom initialization
+- [x] Step 3 — Drawdown formula + color resolution + scrolling render
+- [x] Step 4 — Data libraries (threading, treadling, tie-up tables)
+- [x] Step 5 — RNG + randomized starting state each run
+- [x] Step 6a — Weft color stepping
+- [ ] Step 6b — Tie-up mutation + validation
+- [ ] Step 6c — Treadling evolution + rotation
+- [ ] Step 6d — Threading change + warp sett
+- [ ] Step 7 — Float validation (fold into 6b)
+- [x] Step 8 — Color palettes (5 palettes, 4 colors each)
+- [x] Step 9 — Keyboard controls (pause, speed, palette cycle, debug toggle)
+  - [ ] T/U/R force-mutation keys (blocked on 6b–6d)
+- [x] Step 10 — Debug overlay (threading/tie-up/treadling in margins)
+- [ ] Step 11 — Polish (window title, edge cases, final testing)
