@@ -139,4 +139,16 @@ void advance_loom(Loom *loom);
 // Check all evolution timers and fire any that are due
 void check_evolutions(Loom *loom);
 
+// Flip one bit in the tie-up matrix; rejects invalid or degenerate results
+void mutate_tieup(Loom *loom);
+bool validate_tieup(const Tieup *tieup);
+bool validate_floats(const Loom *loom, int max_float);
+
+// Pick a new threading from the library + randomize the warp color sett
+void randomize_threading(Loom *loom);
+// Treadling: replace sequence, reverse, or switch to tromp-as-writ
+void evolve_treadling(Loom *loom);
+// Shift the treadling sequence start by one position (diagonal drift)
+void rotate_treadling(Loom *loom);
+
 #endif

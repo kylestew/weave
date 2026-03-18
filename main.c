@@ -98,6 +98,9 @@ int main(void) {
     fprintf(stderr, "Weave — Generative Loom\n");
     fprintf(stderr, "  Space     pause/resume\n");
     fprintf(stderr, "  Up/Down   speed up/slow down\n");
+    fprintf(stderr, "  T         force threading change\n");
+    fprintf(stderr, "  U         force tie-up mutation\n");
+    fprintf(stderr, "  R         force treadling change\n");
     fprintf(stderr, "  C         cycle palette\n");
     fprintf(stderr, "  D         toggle debug overlay\n");
     fprintf(stderr, "  Esc/Q     quit\n");
@@ -136,6 +139,15 @@ int main(void) {
                         fprintf(stderr, "palette: %s\n", pal->name);
                         break;
                     }
+                    case SDLK_t:
+                        randomize_threading(&loom);
+                        break;
+                    case SDLK_u:
+                        mutate_tieup(&loom);
+                        break;
+                    case SDLK_r:
+                        evolve_treadling(&loom);
+                        break;
                     case SDLK_d:
                         show_debug = !show_debug;
                         break;
