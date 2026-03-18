@@ -175,6 +175,14 @@ int main(void) {
         if (show_debug)
             render_debug(&loom, pixels, TEX_W);
 
+        // Update window title with current state
+        {
+            char title[128];
+            snprintf(title, sizeof(title), "Weave — pick %u | %s",
+                     loom.pick, loom.paused ? "PAUSED" : "running");
+            SDL_SetWindowTitle(window, title);
+        }
+
         SDL_UpdateTexture(texture, NULL, pixels, TEX_W * 3);
 
         // When debug is off, show only the 64×64 drawdown area (skip margins)

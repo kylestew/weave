@@ -1059,12 +1059,11 @@ Clean up, test edge cases, finalize:
 - [x] Step 4 — Data libraries (threading, treadling, tie-up tables)
 - [x] Step 5 — RNG + randomized starting state each run
 - [x] Step 6a — Weft color stepping
-- [ ] Step 6b — Tie-up mutation + validation
-- [ ] Step 6c — Treadling evolution + rotation
-- [ ] Step 6d — Threading change + warp sett
-- [ ] Step 7 — Float validation (fold into 6b)
+- [x] Step 6b — Tie-up mutation + validation + float checking (includes step 7)
+- [x] Step 6c — Treadling evolution + rotation
+- [x] Step 6d — Threading change + warp sett
+- [x] Step 7 — Float validation (folded into 6b)
 - [x] Step 8 — Color palettes (5 palettes, 4 colors each)
-- [x] Step 9 — Keyboard controls (pause, speed, palette cycle, debug toggle)
-  - [ ] T/U/R force-mutation keys (blocked on 6b–6d)
-- [x] Step 10 — Debug overlay (threading/tie-up/treadling in margins)
-- [ ] Step 11 — Polish (window title, edge cases, final testing)
+- [x] Step 9 — Keyboard controls (pause, speed, T/U/R mutations, palette cycle, debug toggle)
+- [x] Step 10 — Debug overlay (treadling left, tie-up top-left, threading top)
+- [x] Step 11 — Polish (window title, removed noisy debug logs, verified spec intervals)

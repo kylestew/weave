@@ -367,7 +367,6 @@ void check_evolutions(Loom *loom) {
             if (next != warp_dominant) break;
         }
         loom->weft_color_index = next;
-        fprintf(stderr, "[pick %u] weft color → %d\n", p, next);
         loom->next_weft_color_change = p + rng_range(loom, 20, 80);
     }
 }
