@@ -1,0 +1,4 @@
+weave
+*.o
+*.dSYM/
+.DS_Store
