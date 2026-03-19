@@ -56,6 +56,7 @@ typedef struct {
 extern const ThreadingEntry THREADING_LIBRARY[THREADING_COUNT];
 extern const TreadlingEntry TREADLING_LIBRARY[TREADLING_SEQ_COUNT];
 extern const uint8_t TIEUP_LIBRARY[TIEUP_COUNT][TREADLES][SHAFTS];
+extern const char *TIEUP_NAMES[TIEUP_COUNT];
 extern const PaletteEntry PALETTE_LIBRARY[PALETTE_COUNT];
 
 // --- Loom component types ---
@@ -119,6 +120,10 @@ typedef struct {
     int grid_head;                          // ring buffer write position
 
     uint32_t rng_state;                     // xorshift PRNG state
+
+    const char *threading_name;             // current threading pattern name
+    const char *treadling_name;             // current treadling sequence name
+    const char *tieup_name;                 // current tie-up preset name
 
     int paused;
 } Loom;

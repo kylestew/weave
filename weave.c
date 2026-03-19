@@ -44,6 +44,10 @@ const uint8_t TIEUP_LIBRARY[TIEUP_COUNT][TREADLES][SHAFTS] = {
     {{1,1,0,0}, {1,1,1,0}, {0,1,1,1}, {0,0,1,1}},
 };
 
+const char *TIEUP_NAMES[TIEUP_COUNT] = {
+    "2/2 Twill", "Tabby", "Point Twill",
+};
+
 // --- Color Palettes ---
 
 const PaletteEntry PALETTE_LIBRARY[PALETTE_COUNT] = {
@@ -80,10 +84,12 @@ void loom_init(Loom *loom, uint32_t seed) {
     const ThreadingEntry *te = &THREADING_LIBRARY[ti];
     for (int i = 0; i < WARP_ENDS; i++)
         loom->threading.shaft[i] = te->pattern[i % te->length];
+    loom->threading_name = te->name;
 
     // Random starting tie-up from library
     int ui = rng_range(loom, 0, TIEUP_COUNT - 1);
     memcpy(loom->tieup.matrix, TIEUP_LIBRARY[ui], sizeof(loom->tieup.matrix));
+    loom->tieup_name = TIEUP_NAMES[ui];
 
     // Random starting treadling from library
     int ri = rng_range(loom, 0, TREADLING_SEQ_COUNT - 1);
@@ -91,6 +97,7 @@ void loom_init(Loom *loom, uint32_t seed) {
     memcpy(loom->treadling.sequence, re->pattern, re->length);
     loom->treadling.length = re->length;
     loom->treadling.direction = 1;
+    loom->treadling_name = re->name;
 
     // Random starting palette from library
     loom->current_palette_index = rng_range(loom, 0, PALETTE_COUNT - 1);
@@ -243,6 +250,7 @@ void randomize_threading(Loom *loom) {
     const ThreadingEntry *e = &THREADING_LIBRARY[ti];
     for (int i = 0; i < WARP_ENDS; i++)
         loom->threading.shaft[i] = e->pattern[i % e->length];
+    loom->threading_name = e->name;
     fprintf(stderr, "[pick %u] threading → %s\n", loom->pick, e->name);
 
     // Randomize warp color sett
@@ -286,6 +294,7 @@ void evolve_treadling(Loom *loom) {
             const TreadlingEntry *re = &TREADLING_LIBRARY[ri];
             memcpy(loom->treadling.sequence, re->pattern, re->length);
             loom->treadling.length = re->length;
+            loom->treadling_name = re->name;
             fprintf(stderr, "[pick %u] treadling → %s\n", loom->pick, re->name);
             break;
         }
@@ -311,6 +320,7 @@ void evolve_treadling(Loom *loom) {
                 }
             }
             loom->treadling.length = len;
+            loom->treadling_name = "tromp-as-writ";
             fprintf(stderr, "[pick %u] treadling → tromp-as-writ (len %d)\n", loom->pick, len);
             break;
         }

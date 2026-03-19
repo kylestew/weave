@@ -5,10 +5,11 @@
 
 #define PIXEL_SCALE 8
 #define DEBUG_MARGIN 4
-#define TEX_W (WARP_ENDS + DEBUG_MARGIN)    // 68
-#define TEX_H (VISIBLE_ROWS + DEBUG_MARGIN) // 68
-#define WINDOW_W (TEX_W * PIXEL_SCALE)      // 544
-#define WINDOW_H (TEX_H * PIXEL_SCALE)      // 544
+#define GUTTER_H 20
+#define TEX_W  (WARP_ENDS + DEBUG_MARGIN)                    // 68
+#define TEX_H  (VISIBLE_ROWS + DEBUG_MARGIN + GUTTER_H)      // 88 (full buffer with gutter)
+#define WINDOW_W (TEX_W * PIXEL_SCALE)                        // 544
+#define WINDOW_H (TEX_W * PIXEL_SCALE)                        // 544 (square, matches debug width)
 
 // Render the fabric grid into the pixel buffer.
 // tex_w = row stride in pixels, x_offset/y_offset = cell offset for debug margin.
@@ -74,6 +75,123 @@ static void render_debug(const Loom *loom, uint8_t *pixels, int tex_w) {
             pixels[idx] = c.r; pixels[idx+1] = c.g; pixels[idx+2] = c.b;
         }
     }
+}
+
+// 3×5 bitmap font — each glyph is 5 rows, 3 bits per row (bit2=left, bit0=right).
+// Indexed by (char - 32) for printable ASCII range.
+static const uint8_t FONT_3X5[96][5] = {
+    [' ' - 32] = {0,0,0,0,0},
+    ['!' - 32] = {2,2,2,0,2},
+    ['\'' - 32] = {2,2,0,0,0},
+    ['(' - 32] = {1,2,2,2,1},
+    [')' - 32] = {4,2,2,2,4},
+    ['+' - 32] = {0,2,7,2,0},
+    ['-' - 32] = {0,0,7,0,0},
+    ['.' - 32] = {0,0,0,0,2},
+    ['/' - 32] = {1,1,2,4,4},
+    ['0' - 32] = {7,5,5,5,7},
+    ['1' - 32] = {6,2,2,2,7},
+    ['2' - 32] = {7,1,7,4,7},
+    ['3' - 32] = {7,1,7,1,7},
+    ['4' - 32] = {5,5,7,1,1},
+    ['5' - 32] = {7,4,7,1,7},
+    ['6' - 32] = {7,4,7,5,7},
+    ['7' - 32] = {7,1,1,1,1},
+    ['8' - 32] = {7,5,7,5,7},
+    ['9' - 32] = {7,5,7,1,7},
+    [':' - 32] = {0,2,0,2,0},
+    ['A' - 32] = {2,5,7,5,5},
+    ['B' - 32] = {6,5,6,5,6},
+    ['C' - 32] = {3,4,4,4,3},
+    ['D' - 32] = {6,5,5,5,6},
+    ['E' - 32] = {7,4,6,4,7},
+    ['F' - 32] = {7,4,6,4,4},
+    ['G' - 32] = {3,4,5,5,3},
+    ['H' - 32] = {5,5,7,5,5},
+    ['I' - 32] = {7,2,2,2,7},
+    ['J' - 32] = {1,1,1,5,2},
+    ['K' - 32] = {5,5,6,5,5},
+    ['L' - 32] = {4,4,4,4,7},
+    ['M' - 32] = {5,7,5,5,5},
+    ['N' - 32] = {5,7,7,5,5},
+    ['O' - 32] = {2,5,5,5,2},
+    ['P' - 32] = {6,5,6,4,4},
+    ['Q' - 32] = {2,5,5,7,3},
+    ['R' - 32] = {6,5,6,5,5},
+    ['S' - 32] = {3,4,2,1,6},
+    ['T' - 32] = {7,2,2,2,2},
+    ['U' - 32] = {5,5,5,5,7},
+    ['V' - 32] = {5,5,5,5,2},
+    ['W' - 32] = {5,5,5,7,5},
+    ['X' - 32] = {5,5,2,5,5},
+    ['Y' - 32] = {5,5,2,2,2},
+    ['Z' - 32] = {7,1,2,4,7},
+};
+
+// Render a null-terminated string into the pixel buffer at (x, y).
+// Characters are 3px wide with 1px gap = 4px per character advance.
+// Lowercase is mapped to uppercase.
+static void render_text(uint8_t *pixels, int tex_w, int x, int y,
+                        const char *text, Color color) {
+    int cx = x;
+    for (const char *p = text; *p; p++) {
+        char ch = *p;
+        if (ch >= 'a' && ch <= 'z') ch -= 32;
+        int gi = ch - 32;
+        if (gi < 0 || gi >= 96) { cx += 4; continue; }
+        const uint8_t *glyph = FONT_3X5[gi];
+        for (int row = 0; row < 5; row++) {
+            uint8_t bits = glyph[row];
+            for (int col = 0; col < 3; col++) {
+                if (bits & (4 >> col)) {
+                    int px = cx + col;
+                    int py = y + row;
+                    if (px >= 0 && px < tex_w && py >= 0 && py < TEX_H) {
+                        int idx = (py * tex_w + px) * 3;
+                        pixels[idx] = color.r;
+                        pixels[idx+1] = color.g;
+                        pixels[idx+2] = color.b;
+                    }
+                }
+            }
+        }
+        cx += 4;
+    }
+}
+
+// Render the bottom gutter with pattern names for each loom component.
+static void render_gutter(const Loom *loom, uint8_t *pixels, int tex_w) {
+    int gutter_y = DEBUG_MARGIN + VISIBLE_ROWS;  // row 68
+
+    // Clear gutter area to dark background
+    for (int y = gutter_y; y < gutter_y + GUTTER_H; y++) {
+        for (int x = 0; x < tex_w; x++) {
+            int idx = (y * tex_w + x) * 3;
+            pixels[idx] = 20; pixels[idx+1] = 20; pixels[idx+2] = 20;
+        }
+    }
+
+    // Separator line at top of gutter
+    for (int x = 0; x < tex_w; x++) {
+        int idx = (gutter_y * tex_w + x) * 3;
+        pixels[idx] = 50; pixels[idx+1] = 50; pixels[idx+2] = 50;
+    }
+
+    Color text_color = {160, 160, 160};
+    int line_y = gutter_y + 2;  // 2px top padding
+
+    // Line 1: threading name
+    render_text(pixels, tex_w, 1, line_y, loom->threading_name, text_color);
+
+    // Line 2: treadling name (+ direction indicator)
+    render_text(pixels, tex_w, 1, line_y + 6, loom->treadling_name, text_color);
+    if (loom->treadling.direction < 0) {
+        int name_end = 1 + (int)strlen(loom->treadling_name) * 4;
+        render_text(pixels, tex_w, name_end, line_y + 6, "REV", text_color);
+    }
+
+    // Line 3: tie-up name
+    render_text(pixels, tex_w, 1, line_y + 12, loom->tieup_name, text_color);
 }
 
 int main(void) {
@@ -150,6 +268,10 @@ int main(void) {
                         break;
                     case SDLK_d:
                         show_debug = !show_debug;
+                        if (show_debug)
+                            SDL_SetWindowSize(window, TEX_W * PIXEL_SCALE, TEX_H * PIXEL_SCALE);
+                        else
+                            SDL_SetWindowSize(window, WINDOW_W, WINDOW_H);
                         break;
                     case SDLK_ESCAPE:
                     case SDLK_q:
@@ -172,8 +294,10 @@ int main(void) {
 
         // Render into the full 68×68 buffer, drawdown offset by margin
         render_grid(&loom, pixels, TEX_W, DEBUG_MARGIN, DEBUG_MARGIN);
-        if (show_debug)
+        if (show_debug) {
             render_debug(&loom, pixels, TEX_W);
+            render_gutter(&loom, pixels, TEX_W);
+        }
 
         // Update window title with current state
         {
