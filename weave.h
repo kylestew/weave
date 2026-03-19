@@ -27,8 +27,8 @@ typedef struct {
 #define MAX_THREADING_REPEAT 16  // longest threading pattern repeat
 #define THREADING_COUNT      12  // number of classic threading patterns
 #define TREADLING_SEQ_COUNT  9   // number of classic treadling sequences
-#define TIEUP_COUNT          3   // number of starting tie-up presets
-#define PALETTE_COUNT        5   // number of color palettes
+#define TIEUP_COUNT          6   // number of starting tie-up presets
+#define PALETTE_COUNT        10  // number of color palettes
 
 // Threading library entry: a named repeating pattern of shaft assignments.
 // The pattern tiles across all 64 warp ends.
