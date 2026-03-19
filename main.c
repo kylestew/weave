@@ -8,8 +8,10 @@
 #define GUTTER_H 20
 #define TEX_W  (WARP_ENDS + DEBUG_MARGIN)                    // 68
 #define TEX_H  (VISIBLE_ROWS + DEBUG_MARGIN + GUTTER_H)      // 88 (full buffer with gutter)
-#define WINDOW_W (TEX_W * PIXEL_SCALE)                        // 544
-#define WINDOW_H (TEX_W * PIXEL_SCALE)                        // 544 (square, matches debug width)
+#define DRAW_W (WARP_ENDS * PIXEL_SCALE)                       // 512 (non-debug window)
+#define DRAW_H (VISIBLE_ROWS * PIXEL_SCALE)                   // 512
+#define DEBUG_W (TEX_W * PIXEL_SCALE)                          // 544 (debug window)
+#define DEBUG_H (TEX_H * PIXEL_SCALE)                          // 704
 
 // Render the fabric grid into the pixel buffer.
 // tex_w = row stride in pixels, x_offset/y_offset = cell offset for debug margin.
@@ -200,7 +202,7 @@ int main(void) {
 
     SDL_Window *window = SDL_CreateWindow("Weave",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        WINDOW_W, WINDOW_H, SDL_WINDOW_SHOWN);
+        DEBUG_W, DEBUG_H, SDL_WINDOW_SHOWN);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture *texture = SDL_CreateTexture(renderer,
@@ -226,7 +228,7 @@ int main(void) {
 
     uint32_t tick_interval_ms = 250; // 4 rows/sec
     uint32_t last_tick = SDL_GetTicks();
-    int show_debug = 0;
+    int show_debug = 1;
 
     int running = 1;
     while (running) {
@@ -269,9 +271,9 @@ int main(void) {
                     case SDLK_d:
                         show_debug = !show_debug;
                         if (show_debug)
-                            SDL_SetWindowSize(window, TEX_W * PIXEL_SCALE, TEX_H * PIXEL_SCALE);
+                            SDL_SetWindowSize(window, DEBUG_W, DEBUG_H);
                         else
-                            SDL_SetWindowSize(window, WINDOW_W, WINDOW_H);
+                            SDL_SetWindowSize(window, DRAW_W, DRAW_H);
                         break;
                     case SDLK_ESCAPE:
                     case SDLK_q:
@@ -308,6 +310,7 @@ int main(void) {
         }
 
         SDL_UpdateTexture(texture, NULL, pixels, TEX_W * 3);
+        SDL_RenderClear(renderer);
 
         // When debug is off, show only the 64×64 drawdown area (skip margins)
         if (show_debug) {

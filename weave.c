@@ -11,12 +11,22 @@ const ThreadingEntry THREADING_LIBRARY[THREADING_COUNT] = {
     {"Broken twill",        {0,1,2,3,1,0,3,2},                             8},
     {"Extended point",      {0,1,2,2,3,3,2,2,1,0},                        10},
     {"Monk's belt",         {0,1,0,1,2,3,2,3},                             8},
-    {"M's and O's",         {0,1,0,1,2,3,2,3},                             8},
+    {"M's and O's",         {0,1,0,1,0,1,2,3,2,3,2,3},                    12},
     {"Overshot",            {0,1,0,2,1,2,1,3,0,3,0,2,1,2,1,0},           16},
     {"Huck lace",           {0,1,0,2,3,2},                                 6},
     {"Advancing twill",     {0,1,2,3,1,2,3,0},                             8},
     {"Crepe",               {0,2,1,3,2,0,3,1},                             8},
     {"Undulating twill",    {0,1,2,3,2,3,0,1,0,1,2,3},                   12},
+    {"Goose eye",           {0,1,2,3,3,2,1,0},                             8},
+    {"Bird's eye",          {0,1,0,3,2,3},                                 6},
+    {"Summer & winter",     {0,2,1,2,0,3,1,3},                             8},
+    {"Crackle weave",       {0,1,2,1,1,2,3,2},                             8},
+    {"Dornick twill",       {0,1,2,1,0,3,2,3},                             8},
+    {"Canvas / basket",     {0,0,1,1,2,2,3,3},                             8},
+    {"Cat's paw",           {0,1,0,1,1,2,1,2,2,3,2,3,3,0,3,0},           16},
+    {"Snail trail",         {0,1,0,1,0,1,1,2,2,3,2,3,2,3,3,0},           16},
+    {"Turned twill",        {0,1,2,3,0,3,2,1},                             8},
+    {"Zigzag point",        {0,0,1,1,2,2,3,3,2,2,1,1},                   12},
 };
 
 // Each treadling entry is a repeating sequence of pedal presses (y-axis).
@@ -85,41 +95,19 @@ int rng_range(Loom *loom, int min, int max) {
     return min + (int)(rng_next(loom) % (uint32_t)(max - min + 1));
 }
 
-// --- Initialization ---
+// --- Warp Sett Generation ---
 
-void loom_init(Loom *loom, uint32_t seed) {
-    memset(loom, 0, sizeof(Loom));
-    loom->rng_state = seed ? seed : 1;
-
-    // Random starting threading from library
-    int ti = rng_range(loom, 0, THREADING_COUNT - 1);
-    const ThreadingEntry *te = &THREADING_LIBRARY[ti];
-    for (int i = 0; i < WARP_ENDS; i++)
-        loom->threading.shaft[i] = te->pattern[i % te->length];
-    loom->threading_name = te->name;
-
-    // Random starting tie-up from library
-    int ui = rng_range(loom, 0, TIEUP_COUNT - 1);
-    memcpy(loom->tieup.matrix, TIEUP_LIBRARY[ui], sizeof(loom->tieup.matrix));
-    loom->tieup_name = TIEUP_NAMES[ui];
-
-    // Random starting treadling from library
-    int ri = rng_range(loom, 0, TREADLING_SEQ_COUNT - 1);
-    const TreadlingEntry *re = &TREADLING_LIBRARY[ri];
-    memcpy(loom->treadling.sequence, re->pattern, re->length);
-    loom->treadling.length = re->length;
-    loom->treadling.direction = 1;
-    loom->treadling_name = re->name;
-
-    // Random starting palette from library
-    loom->current_palette_index = rng_range(loom, 0, PALETTE_COUNT - 1);
-    const PaletteEntry *pal = &PALETTE_LIBRARY[loom->current_palette_index];
-    memcpy(loom->palette, pal->colors, sizeof(Color) * pal->size);
-    loom->palette_size = pal->size;
-
-    // Random non-solid warp sett (1-6, skipping solid)
-    int sett_type = rng_range(loom, 1, 6);
+// Generate a random warp color sett. sett_type 0–15:
+//   0: solid, 1: alternating, 2: tartan, 3: gradient, 4: herringbone,
+//   5: windowpane, 6: district check, 7: log cabin, 8: houndstooth,
+//   9: shepherd's check, 10: glen check, 11: gingham, 12: tattersall,
+//   13: gun club, 14: madras, 15: pin stripe
+static void generate_sett(Loom *loom, int sett_type) {
     switch (sett_type) {
+        case 0: // Solid
+            loom->warp_sett.indices[0] = rng_range(loom, 0, loom->palette_size - 1);
+            loom->warp_sett.length = 1;
+            break;
         case 1: { // Alternating
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
@@ -191,7 +179,119 @@ void loom_init(Loom *loom, uint32_t seed) {
             loom->warp_sett.length = len;
             break;
         }
+        case 7: { // Log cabin
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,b,a,b,b,a,b,a};
+            memcpy(loom->warp_sett.indices, s, 8);
+            loom->warp_sett.length = 8;
+            break;
+        }
+        case 8: { // Houndstooth
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,a,a,b,b,b,b};
+            memcpy(loom->warp_sett.indices, s, 8);
+            loom->warp_sett.length = 8;
+            break;
+        }
+        case 9: { // Shepherd's check
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,b,b};
+            memcpy(loom->warp_sett.indices, s, 4);
+            loom->warp_sett.length = 4;
+            break;
+        }
+        case 10: { // Glen check
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,b,b,a,a,b,b,a,a,a,a,b,b,b,b};
+            memcpy(loom->warp_sett.indices, s, 16);
+            loom->warp_sett.length = 16;
+            break;
+        }
+        case 11: { // Gingham
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,a,b,b,b};
+            memcpy(loom->warp_sett.indices, s, 6);
+            loom->warp_sett.length = 6;
+            break;
+        }
+        case 12: { // Tattersall
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,a,b,a,a,a,c};
+            memcpy(loom->warp_sett.indices, s, 8);
+            loom->warp_sett.length = 8;
+            break;
+        }
+        case 13: { // Gun club
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,b,b,a,a,c,c};
+            memcpy(loom->warp_sett.indices, s, 8);
+            loom->warp_sett.length = 8;
+            break;
+        }
+        case 14: { // Madras
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t d = (c + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,b,b,b,c,a,a,d,d,c,b};
+            memcpy(loom->warp_sett.indices, s, 12);
+            loom->warp_sett.length = 12;
+            break;
+        }
+        case 15: { // Pin stripe
+            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
+            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
+            uint8_t s[] = {a,a,a,a,a,a,a,b};
+            memcpy(loom->warp_sett.indices, s, 8);
+            loom->warp_sett.length = 8;
+            break;
+        }
     }
+}
+
+// --- Initialization ---
+
+void loom_init(Loom *loom, uint32_t seed) {
+    memset(loom, 0, sizeof(Loom));
+    loom->rng_state = seed ? seed : 1;
+
+    // Random starting threading from library
+    int ti = rng_range(loom, 0, THREADING_COUNT - 1);
+    const ThreadingEntry *te = &THREADING_LIBRARY[ti];
+    for (int i = 0; i < WARP_ENDS; i++)
+        loom->threading.shaft[i] = te->pattern[i % te->length];
+    loom->threading_name = te->name;
+
+    // Random starting tie-up from library
+    int ui = rng_range(loom, 0, TIEUP_COUNT - 1);
+    memcpy(loom->tieup.matrix, TIEUP_LIBRARY[ui], sizeof(loom->tieup.matrix));
+    loom->tieup_name = TIEUP_NAMES[ui];
+
+    // Random starting treadling from library
+    int ri = rng_range(loom, 0, TREADLING_SEQ_COUNT - 1);
+    const TreadlingEntry *re = &TREADLING_LIBRARY[ri];
+    memcpy(loom->treadling.sequence, re->pattern, re->length);
+    loom->treadling.length = re->length;
+    loom->treadling.direction = 1;
+    loom->treadling_name = re->name;
+
+    // Random starting palette from library
+    loom->current_palette_index = rng_range(loom, 0, PALETTE_COUNT - 1);
+    const PaletteEntry *pal = &PALETTE_LIBRARY[loom->current_palette_index];
+    memcpy(loom->palette, pal->colors, sizeof(Color) * pal->size);
+    loom->palette_size = pal->size;
+
+    // Random non-solid warp sett (1-15, skipping solid)
+    generate_sett(loom, rng_range(loom, 1, 15));
     loom->weft_color_index = 1;
 
     loom->grid_head = 0;
@@ -337,85 +437,8 @@ void randomize_threading(Loom *loom) {
     loom->threading_name = e->name;
     fprintf(stderr, "[pick %u] threading → %s\n", loom->pick, e->name);
 
-    // Randomize warp color sett
-    int sett_type = rng_range(loom, 0, 6);
-    switch (sett_type) {
-        case 0: // Solid — all one color
-            loom->warp_sett.indices[0] = rng_range(loom, 0, loom->palette_size - 1);
-            loom->warp_sett.length = 1;
-            break;
-        case 1: { // Alternating — two random colors
-            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
-            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            loom->warp_sett.indices[0] = a;
-            loom->warp_sett.indices[1] = b;
-            loom->warp_sett.length = 2;
-            break;
-        }
-        case 2: { // Tartan-like — bands of random colors
-            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
-            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            loom->warp_sett.indices[0] = a; loom->warp_sett.indices[1] = a;
-            loom->warp_sett.indices[2] = b; loom->warp_sett.indices[3] = b;
-            loom->warp_sett.indices[4] = a; loom->warp_sett.indices[5] = a;
-            loom->warp_sett.indices[6] = c; loom->warp_sett.indices[7] = c;
-            loom->warp_sett.length = 8;
-            break;
-        }
-        case 3: { // Gradient — shuffled palette
-            uint8_t order[MAX_SETT];
-            for (int i = 0; i < loom->palette_size; i++)
-                order[i] = i;
-            for (int i = loom->palette_size - 1; i > 0; i--) {
-                int j = rng_range(loom, 0, i);
-                uint8_t tmp = order[i]; order[i] = order[j]; order[j] = tmp;
-            }
-            for (int i = 0; i < loom->palette_size && i < MAX_SETT; i++)
-                loom->warp_sett.indices[i] = order[i];
-            loom->warp_sett.length = loom->palette_size;
-            break;
-        }
-        case 4: { // Herringbone — A A B B C C B B (mirrors)
-            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
-            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            loom->warp_sett.indices[0] = a; loom->warp_sett.indices[1] = a;
-            loom->warp_sett.indices[2] = b; loom->warp_sett.indices[3] = b;
-            loom->warp_sett.indices[4] = c; loom->warp_sett.indices[5] = c;
-            loom->warp_sett.indices[6] = b; loom->warp_sett.indices[7] = b;
-            loom->warp_sett.length = 8;
-            break;
-        }
-        case 5: { // Windowpane — long run of one color with thin accent stripe
-            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
-            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            int width = rng_range(loom, 4, 6);
-            int len = 0;
-            for (int i = 0; i < width && len < MAX_SETT - 1; i++)
-                loom->warp_sett.indices[len++] = a;
-            loom->warp_sett.indices[len++] = b;
-            loom->warp_sett.length = len;
-            break;
-        }
-        case 6: { // District check — 3 colors in unequal bands
-            uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
-            uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            int wa = rng_range(loom, 2, 4);
-            int wb = rng_range(loom, 2, 4);
-            int wc = rng_range(loom, 1, 3);
-            int len = 0;
-            for (int i = 0; i < wa && len < MAX_SETT; i++)
-                loom->warp_sett.indices[len++] = a;
-            for (int i = 0; i < wb && len < MAX_SETT; i++)
-                loom->warp_sett.indices[len++] = b;
-            for (int i = 0; i < wc && len < MAX_SETT; i++)
-                loom->warp_sett.indices[len++] = c;
-            loom->warp_sett.length = len;
-            break;
-        }
-    }
+    // Randomize warp color sett (0-15, including solid)
+    generate_sett(loom, rng_range(loom, 0, 15));
 }
 
 // Evolve the treadling sequence (y-axis: which pedal per row).

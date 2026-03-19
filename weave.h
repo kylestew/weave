@@ -25,7 +25,7 @@ typedef struct {
 // --- Library types and constants ---
 
 #define MAX_THREADING_REPEAT 16  // longest threading pattern repeat
-#define THREADING_COUNT      12  // number of classic threading patterns
+#define THREADING_COUNT      22  // number of classic threading patterns
 #define TREADLING_SEQ_COUNT  9   // number of classic treadling sequences
 #define TIEUP_COUNT          6   // number of starting tie-up presets
 #define PALETTE_COUNT        10  // number of color palettes
