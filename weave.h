@@ -109,12 +109,17 @@ typedef struct {
     int palette_size;
     int current_palette_index;              // which palette from the library
 
+    Color palette_from[MAX_PALETTE];        // snapshot of palette before crossfade
+    uint32_t blend_start_pick;              // pick when crossfade began
+    int blend_duration;                     // total picks for crossfade (0 = inactive)
+
     uint32_t pick;                          // current pick number (pick = one weft pass = one row)
     uint32_t next_threading_change;         // when to re-thread (rare, dramatic)
     uint32_t next_tieup_mutation;           // when to flip one tie-up bit (frequent, subtle)
     uint32_t next_treadling_change;         // when to swap treadling sequence (moderate)
     uint32_t next_treadling_rotation;       // when to rotate treadling start (frequent, subtle)
     uint32_t next_weft_color_change;        // when to step weft color (frequent)
+    uint32_t next_palette_change;           // when to crossfade to a new palette
 
     uint8_t grid[VISIBLE_ROWS][WARP_ENDS];  // ring buffer of palette indices (the fabric)
     int grid_head;                          // ring buffer write position
@@ -126,6 +131,7 @@ typedef struct {
     const char *tieup_name;                 // current tie-up preset name
 
     int paused;
+    int crossfade;                          // 1 = smooth palette blending, 0 = instant
 } Loom;
 
 void loom_init(Loom *loom, uint32_t seed);
@@ -155,5 +161,10 @@ void randomize_threading(Loom *loom);
 void evolve_treadling(Loom *loom);
 // Shift the treadling sequence start by one position (diagonal drift)
 void rotate_treadling(Loom *loom);
+
+// Crossfade to a new palette over `duration` picks
+void transition_palette(Loom *loom, int new_index, int duration);
+// Pick a random different palette and crossfade to it
+void evolve_palette(Loom *loom);
 
 #endif

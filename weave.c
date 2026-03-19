@@ -303,8 +303,10 @@ void loom_init(Loom *loom, uint32_t seed) {
     loom->next_treadling_change   = rng_range(loom, 100, 300);
     loom->next_treadling_rotation = rng_range(loom, 50, 150);
     loom->next_weft_color_change  = rng_range(loom, 20, 80);
+    loom->next_palette_change     = rng_range(loom, 300, 800);
 
     loom->paused = 0;
+    loom->crossfade = 1;
 }
 
 // Core drawdown formula: Tieup[Treadling[y]][Threading[x]]
@@ -496,6 +498,55 @@ void rotate_treadling(Loom *loom) {
     loom->treadling.sequence[loom->treadling.length - 1] = first;
 }
 
+// Crossfade to a new palette over `duration` picks.
+// If a blend is already in progress, the current interpolated state becomes
+// the new starting point (no jarring snap on mid-transition interrupts).
+void transition_palette(Loom *loom, int new_index, int duration) {
+    if (duration < 1) duration = 1;
+
+    if (loom->blend_duration > 0) {
+        // Mid-transition: compute the interpolated palette at this moment
+        int32_t progress = (int32_t)(loom->pick - loom->blend_start_pick);
+        if (progress < 0) progress = 0;
+        if (progress > loom->blend_duration) progress = loom->blend_duration;
+        int t256 = (progress * 256) / loom->blend_duration;
+        for (int i = 0; i < loom->palette_size; i++) {
+            loom->palette_from[i].r = (uint8_t)(
+                loom->palette_from[i].r +
+                ((loom->palette[i].r - loom->palette_from[i].r) * t256 >> 8));
+            loom->palette_from[i].g = (uint8_t)(
+                loom->palette_from[i].g +
+                ((loom->palette[i].g - loom->palette_from[i].g) * t256 >> 8));
+            loom->palette_from[i].b = (uint8_t)(
+                loom->palette_from[i].b +
+                ((loom->palette[i].b - loom->palette_from[i].b) * t256 >> 8));
+        }
+    } else {
+        memcpy(loom->palette_from, loom->palette,
+               sizeof(Color) * loom->palette_size);
+    }
+
+    // Load new palette
+    const PaletteEntry *pal = &PALETTE_LIBRARY[new_index];
+    memcpy(loom->palette, pal->colors, sizeof(Color) * pal->size);
+    loom->palette_size = pal->size;
+    loom->current_palette_index = new_index;
+
+    loom->blend_start_pick = loom->pick;
+    loom->blend_duration = duration;
+
+    fprintf(stderr, "[pick %u] palette → %s (crossfade %d rows)\n",
+            loom->pick, pal->name, duration);
+}
+
+// Pick a random different palette and crossfade to it.
+void evolve_palette(Loom *loom) {
+    int offset = rng_range(loom, 1, PALETTE_COUNT - 1);
+    int new_idx = (loom->current_palette_index + offset) % PALETTE_COUNT;
+    int duration = rng_range(loom, 40, 60);
+    transition_palette(loom, new_idx, duration);
+}
+
 void check_evolutions(Loom *loom) {
     uint32_t p = loom->pick;
 
@@ -538,5 +589,11 @@ void check_evolutions(Loom *loom) {
         }
         loom->weft_color_index = next;
         loom->next_weft_color_change = p + rng_range(loom, 20, 80);
+    }
+
+    // Palette crossfade: swap to a new color palette with smooth interpolation.
+    if (loom->crossfade && p >= loom->next_palette_change) {
+        evolve_palette(loom);
+        loom->next_palette_change = p + rng_range(loom, 300, 800);
     }
 }

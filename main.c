@@ -19,9 +19,39 @@ static void render_grid(const Loom *loom, uint8_t *pixels, int tex_w,
                         int x_offset, int y_offset) {
     for (int y = 0; y < VISIBLE_ROWS; y++) {
         int src_row = (loom->grid_head + y) % VISIBLE_ROWS;
+
+        // Resolve the palette for this row (blend-aware).
+        // y=0 is oldest (top), y=VISIBLE_ROWS-1 is newest (bottom).
+        const Color *row_pal = loom->palette;
+        Color blended[MAX_PALETTE];
+        if (loom->blend_duration > 0) {
+            uint32_t row_pick = loom->pick - (uint32_t)(VISIBLE_ROWS - y);
+            int32_t offset = (int32_t)(row_pick - loom->blend_start_pick);
+
+            if (offset < 0) {
+                row_pal = loom->palette_from;
+            } else if (offset < loom->blend_duration) {
+                int t = (offset * 256) / loom->blend_duration;
+                int t_inv = 256 - t;
+                for (int i = 0; i < loom->palette_size; i++) {
+                    blended[i].r = (uint8_t)(
+                        (loom->palette_from[i].r * t_inv +
+                         loom->palette[i].r * t) >> 8);
+                    blended[i].g = (uint8_t)(
+                        (loom->palette_from[i].g * t_inv +
+                         loom->palette[i].g * t) >> 8);
+                    blended[i].b = (uint8_t)(
+                        (loom->palette_from[i].b * t_inv +
+                         loom->palette[i].b * t) >> 8);
+                }
+                row_pal = blended;
+            }
+            // else offset >= blend_duration: use loom->palette (default)
+        }
+
         for (int x = 0; x < WARP_ENDS; x++) {
             uint8_t ci = loom->grid[src_row][x];
-            Color c = loom->palette[ci % loom->palette_size];
+            Color c = row_pal[ci % loom->palette_size];
             int off = ((y + y_offset) * tex_w + (x + x_offset)) * 3;
             pixels[off]     = c.r;
             pixels[off + 1] = c.g;
@@ -222,6 +252,7 @@ int main(void) {
     fprintf(stderr, "  U         force tie-up mutation\n");
     fprintf(stderr, "  R         force treadling change\n");
     fprintf(stderr, "  C         cycle palette\n");
+    fprintf(stderr, "  F         toggle crossfade\n");
     fprintf(stderr, "  D         toggle debug overlay\n");
     fprintf(stderr, "  Esc/Q     quit\n");
     fprintf(stderr, "palette: %s\n", PALETTE_LIBRARY[loom.current_palette_index].name);
@@ -249,16 +280,26 @@ int main(void) {
                         fprintf(stderr, "speed: %ums/row\n", tick_interval_ms);
                         break;
                     case SDLK_c: {
-                        loom.current_palette_index =
-                            (loom.current_palette_index + 1) % PALETTE_COUNT;
-                        const PaletteEntry *pal =
-                            &PALETTE_LIBRARY[loom.current_palette_index];
-                        memcpy(loom.palette, pal->colors,
-                               sizeof(Color) * pal->size);
-                        loom.palette_size = pal->size;
-                        fprintf(stderr, "palette: %s\n", pal->name);
+                        int new_idx = (loom.current_palette_index + 1) % PALETTE_COUNT;
+                        if (loom.crossfade) {
+                            transition_palette(&loom, new_idx, 40);
+                        } else {
+                            const PaletteEntry *pal = &PALETTE_LIBRARY[new_idx];
+                            memcpy(loom.palette, pal->colors,
+                                   sizeof(Color) * pal->size);
+                            loom.palette_size = pal->size;
+                            loom.current_palette_index = new_idx;
+                            loom.blend_duration = 0;
+                            fprintf(stderr, "palette: %s\n", pal->name);
+                        }
                         break;
                     }
+                    case SDLK_f:
+                        loom.crossfade = !loom.crossfade;
+                        if (!loom.crossfade) loom.blend_duration = 0;
+                        fprintf(stderr, "crossfade: %s\n",
+                                loom.crossfade ? "on" : "off");
+                        break;
                     case SDLK_t:
                         randomize_threading(&loom);
                         break;
