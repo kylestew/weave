@@ -104,7 +104,8 @@ typedef struct {
     Treadling treadling;                    // y-axis: pedal per pick (row)
 
     ColorSett warp_sett;                    // color stripe pattern across warp
-    uint8_t weft_color_index;               // current weft (horizontal thread) color
+    ColorSett weft_sett;                    // color stripe pattern across weft (picks)
+    int weft_sett_mirrored;                 // 1 = weft copies warp sett (plaid), 0 = independent
     Color palette[MAX_PALETTE];
     int palette_size;
     int current_palette_index;              // which palette from the library
@@ -118,7 +119,8 @@ typedef struct {
     uint32_t next_tieup_mutation;           // when to flip one tie-up bit (frequent, subtle)
     uint32_t next_treadling_change;         // when to swap treadling sequence (moderate)
     uint32_t next_treadling_rotation;       // when to rotate treadling start (frequent, subtle)
-    uint32_t next_weft_color_change;        // when to step weft color (frequent)
+    uint32_t next_weft_color_change;        // when to step solid weft color (active in solid mode)
+    uint32_t next_weft_sett_change;         // when to switch weft sett mode
     uint32_t next_palette_change;           // when to crossfade to a new palette
 
     uint8_t grid[VISIBLE_ROWS][WARP_ENDS];  // ring buffer of palette indices (the fabric)
@@ -161,6 +163,8 @@ void randomize_threading(Loom *loom);
 void evolve_treadling(Loom *loom);
 // Shift the treadling sequence start by one position (diagonal drift)
 void rotate_treadling(Loom *loom);
+// Evolve the weft sett: mirror warp, generate independent, or cycling solid
+void evolve_weft_sett(Loom *loom);
 
 // Crossfade to a new palette over `duration` picks
 void transition_palette(Loom *loom, int new_index, int duration);

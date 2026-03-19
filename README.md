@@ -16,7 +16,7 @@ pixel = Tieup[ Treadling[pick] ][ Threading[column] ]
 - **Treadling** maps each row (pick) to one of 4 treadles (foot pedals)
 - **Tie-up** is a 4x4 matrix connecting treadles to shafts
 
-The result is binary per cell — warp thread on top or weft thread on top — then colored by a warp color sett and weft color to produce the final pixel.
+The result is binary per cell — warp thread on top or weft thread on top — then colored by a warp color sett and weft color sett to produce the final pixel.
 
 ### Evolution
 
@@ -24,10 +24,11 @@ The loom's three draft components mutate independently at different rates:
 
 | Event | Interval (picks) | Effect |
 |---|---|---|
-| Weft color step | 20–80 | Horizontal color banding |
+| Weft color step | 20–80 | Horizontal color banding (solid weft mode only) |
 | Tie-up mutation | 30–90 | Single bit flip; gradual texture drift |
 | Treadling rotation | 50–150 | Diagonal shift of the pattern |
 | Treadling replacement | 100–300 | New pedal sequence or reversal |
+| Weft sett change | 150–400 | Switch weft between mirror/independent/cycling solid |
 | Threading change | 200–600 | Dramatic new warp pattern + color sett |
 
 Mutations are validated against real weaving constraints: no impossible sheds (all-up/all-down), no duplicate treadle rows, and a maximum float length of 7.
@@ -36,7 +37,7 @@ Mutations are validated against real weaving constraints: no impossible sheds (a
 
 12 classic threadings (straight draw, point twill, rosepath, overshot, etc.), 9 treadling sequences, 6 starting tie-ups (2/2 twill, tabby, point twill, 1/3 twill, 3/1 twill, summer/winter), and 10 color palettes are built in as static data.
 
-7 warp sett types — alternating, tartan, gradient, herringbone, windowpane, district check, and solid — use randomized color indices so the same sett shape reads differently each time it appears.
+16 sett types — alternating, tartan, gradient, herringbone, windowpane, district check, log cabin, houndstooth, shepherd's check, glen check, gingham, tattersall, gun club, madras, pin stripe, and solid — use randomized color indices so the same sett shape reads differently each time it appears. Both warp and weft axes have their own color sett; when the weft sett mirrors the warp sett, true plaid/tartan patterns emerge from the interplay of two identical color sequences through the binary drawdown.
 
 ## Build
 
@@ -61,6 +62,7 @@ make
 | T | Force threading change |
 | U | Force tie-up mutation |
 | R | Force treadling change |
+| W | Force weft sett change |
 | C | Cycle color palette |
 | D | Toggle debug overlay |
 | Esc / Q | Quit |

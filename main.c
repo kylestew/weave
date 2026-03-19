@@ -5,7 +5,7 @@
 
 #define PIXEL_SCALE 8
 #define DEBUG_MARGIN 4
-#define GUTTER_H 20
+#define GUTTER_H 26
 #define TEX_W  (WARP_ENDS + DEBUG_MARGIN)                    // 68
 #define TEX_H  (VISIBLE_ROWS + DEBUG_MARGIN + GUTTER_H)      // 88 (full buffer with gutter)
 #define DRAW_W (WARP_ENDS * PIXEL_SCALE)                       // 512 (non-debug window)
@@ -224,6 +224,11 @@ static void render_gutter(const Loom *loom, uint8_t *pixels, int tex_w) {
 
     // Line 3: tie-up name
     render_text(pixels, tex_w, 1, line_y + 12, loom->tieup_name, text_color);
+
+    // Line 4: weft sett mode
+    const char *weft_label = loom->weft_sett_mirrored ? "WEFT: MIRROR"
+        : loom->weft_sett.length == 1 ? "WEFT: CYCLE" : "WEFT: INDEP";
+    render_text(pixels, tex_w, 1, line_y + 18, weft_label, text_color);
 }
 
 int main(void) {
@@ -251,6 +256,7 @@ int main(void) {
     fprintf(stderr, "  T         force threading change\n");
     fprintf(stderr, "  U         force tie-up mutation\n");
     fprintf(stderr, "  R         force treadling change\n");
+    fprintf(stderr, "  W         force weft sett change\n");
     fprintf(stderr, "  C         cycle palette\n");
     fprintf(stderr, "  F         toggle crossfade\n");
     fprintf(stderr, "  D         toggle debug overlay\n");
@@ -308,6 +314,9 @@ int main(void) {
                         break;
                     case SDLK_r:
                         evolve_treadling(&loom);
+                        break;
+                    case SDLK_w:
+                        evolve_weft_sett(&loom);
                         break;
                     case SDLK_d:
                         show_debug = !show_debug;

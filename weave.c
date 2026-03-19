@@ -102,29 +102,29 @@ int rng_range(Loom *loom, int min, int max) {
 //   5: windowpane, 6: district check, 7: log cabin, 8: houndstooth,
 //   9: shepherd's check, 10: glen check, 11: gingham, 12: tattersall,
 //   13: gun club, 14: madras, 15: pin stripe
-static void generate_sett(Loom *loom, int sett_type) {
+static void generate_sett(Loom *loom, ColorSett *target, int sett_type) {
     switch (sett_type) {
         case 0: // Solid
-            loom->warp_sett.indices[0] = rng_range(loom, 0, loom->palette_size - 1);
-            loom->warp_sett.length = 1;
+            target->indices[0] = rng_range(loom, 0, loom->palette_size - 1);
+            target->length = 1;
             break;
         case 1: { // Alternating
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            loom->warp_sett.indices[0] = a;
-            loom->warp_sett.indices[1] = b;
-            loom->warp_sett.length = 2;
+            target->indices[0] = a;
+            target->indices[1] = b;
+            target->length = 2;
             break;
         }
         case 2: { // Tartan
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            loom->warp_sett.indices[0] = a; loom->warp_sett.indices[1] = a;
-            loom->warp_sett.indices[2] = b; loom->warp_sett.indices[3] = b;
-            loom->warp_sett.indices[4] = a; loom->warp_sett.indices[5] = a;
-            loom->warp_sett.indices[6] = c; loom->warp_sett.indices[7] = c;
-            loom->warp_sett.length = 8;
+            target->indices[0] = a; target->indices[1] = a;
+            target->indices[2] = b; target->indices[3] = b;
+            target->indices[4] = a; target->indices[5] = a;
+            target->indices[6] = c; target->indices[7] = c;
+            target->length = 8;
             break;
         }
         case 3: { // Gradient
@@ -136,19 +136,19 @@ static void generate_sett(Loom *loom, int sett_type) {
                 uint8_t tmp = order[i]; order[i] = order[j]; order[j] = tmp;
             }
             for (int i = 0; i < loom->palette_size && i < MAX_SETT; i++)
-                loom->warp_sett.indices[i] = order[i];
-            loom->warp_sett.length = loom->palette_size;
+                target->indices[i] = order[i];
+            target->length = loom->palette_size;
             break;
         }
         case 4: { // Herringbone
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
-            loom->warp_sett.indices[0] = a; loom->warp_sett.indices[1] = a;
-            loom->warp_sett.indices[2] = b; loom->warp_sett.indices[3] = b;
-            loom->warp_sett.indices[4] = c; loom->warp_sett.indices[5] = c;
-            loom->warp_sett.indices[6] = b; loom->warp_sett.indices[7] = b;
-            loom->warp_sett.length = 8;
+            target->indices[0] = a; target->indices[1] = a;
+            target->indices[2] = b; target->indices[3] = b;
+            target->indices[4] = c; target->indices[5] = c;
+            target->indices[6] = b; target->indices[7] = b;
+            target->length = 8;
             break;
         }
         case 5: { // Windowpane
@@ -157,9 +157,9 @@ static void generate_sett(Loom *loom, int sett_type) {
             int width = rng_range(loom, 4, 6);
             int len = 0;
             for (int i = 0; i < width && len < MAX_SETT - 1; i++)
-                loom->warp_sett.indices[len++] = a;
-            loom->warp_sett.indices[len++] = b;
-            loom->warp_sett.length = len;
+                target->indices[len++] = a;
+            target->indices[len++] = b;
+            target->length = len;
             break;
         }
         case 6: { // District check
@@ -171,52 +171,52 @@ static void generate_sett(Loom *loom, int sett_type) {
             int wc = rng_range(loom, 1, 3);
             int len = 0;
             for (int i = 0; i < wa && len < MAX_SETT; i++)
-                loom->warp_sett.indices[len++] = a;
+                target->indices[len++] = a;
             for (int i = 0; i < wb && len < MAX_SETT; i++)
-                loom->warp_sett.indices[len++] = b;
+                target->indices[len++] = b;
             for (int i = 0; i < wc && len < MAX_SETT; i++)
-                loom->warp_sett.indices[len++] = c;
-            loom->warp_sett.length = len;
+                target->indices[len++] = c;
+            target->length = len;
             break;
         }
         case 7: { // Log cabin
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,b,a,b,b,a,b,a};
-            memcpy(loom->warp_sett.indices, s, 8);
-            loom->warp_sett.length = 8;
+            memcpy(target->indices, s, 8);
+            target->length = 8;
             break;
         }
         case 8: { // Houndstooth
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,a,a,b,b,b,b};
-            memcpy(loom->warp_sett.indices, s, 8);
-            loom->warp_sett.length = 8;
+            memcpy(target->indices, s, 8);
+            target->length = 8;
             break;
         }
         case 9: { // Shepherd's check
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,b,b};
-            memcpy(loom->warp_sett.indices, s, 4);
-            loom->warp_sett.length = 4;
+            memcpy(target->indices, s, 4);
+            target->length = 4;
             break;
         }
         case 10: { // Glen check
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,b,b,a,a,b,b,a,a,a,a,b,b,b,b};
-            memcpy(loom->warp_sett.indices, s, 16);
-            loom->warp_sett.length = 16;
+            memcpy(target->indices, s, 16);
+            target->length = 16;
             break;
         }
         case 11: { // Gingham
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,a,b,b,b};
-            memcpy(loom->warp_sett.indices, s, 6);
-            loom->warp_sett.length = 6;
+            memcpy(target->indices, s, 6);
+            target->length = 6;
             break;
         }
         case 12: { // Tattersall
@@ -224,8 +224,8 @@ static void generate_sett(Loom *loom, int sett_type) {
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,a,b,a,a,a,c};
-            memcpy(loom->warp_sett.indices, s, 8);
-            loom->warp_sett.length = 8;
+            memcpy(target->indices, s, 8);
+            target->length = 8;
             break;
         }
         case 13: { // Gun club
@@ -233,8 +233,8 @@ static void generate_sett(Loom *loom, int sett_type) {
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,b,b,a,a,c,c};
-            memcpy(loom->warp_sett.indices, s, 8);
-            loom->warp_sett.length = 8;
+            memcpy(target->indices, s, 8);
+            target->length = 8;
             break;
         }
         case 14: { // Madras
@@ -243,16 +243,16 @@ static void generate_sett(Loom *loom, int sett_type) {
             uint8_t c = (b + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t d = (c + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,b,b,b,c,a,a,d,d,c,b};
-            memcpy(loom->warp_sett.indices, s, 12);
-            loom->warp_sett.length = 12;
+            memcpy(target->indices, s, 12);
+            target->length = 12;
             break;
         }
         case 15: { // Pin stripe
             uint8_t a = rng_range(loom, 0, loom->palette_size - 1);
             uint8_t b = (a + rng_range(loom, 1, loom->palette_size - 1)) % loom->palette_size;
             uint8_t s[] = {a,a,a,a,a,a,a,b};
-            memcpy(loom->warp_sett.indices, s, 8);
-            loom->warp_sett.length = 8;
+            memcpy(target->indices, s, 8);
+            target->length = 8;
             break;
         }
     }
@@ -291,8 +291,10 @@ void loom_init(Loom *loom, uint32_t seed) {
     loom->palette_size = pal->size;
 
     // Random non-solid warp sett (1-15, skipping solid)
-    generate_sett(loom, rng_range(loom, 1, 15));
-    loom->weft_color_index = 1;
+    generate_sett(loom, &loom->warp_sett, rng_range(loom, 1, 15));
+    // Start with weft sett mirroring warp sett (creates plaid)
+    memcpy(&loom->weft_sett, &loom->warp_sett, sizeof(ColorSett));
+    loom->weft_sett_mirrored = 1;
 
     loom->grid_head = 0;
     loom->pick = 0;
@@ -303,6 +305,7 @@ void loom_init(Loom *loom, uint32_t seed) {
     loom->next_treadling_change   = rng_range(loom, 100, 300);
     loom->next_treadling_rotation = rng_range(loom, 50, 150);
     loom->next_weft_color_change  = rng_range(loom, 20, 80);
+    loom->next_weft_sett_change   = rng_range(loom, 150, 400);
     loom->next_palette_change     = rng_range(loom, 300, 800);
 
     loom->paused = 0;
@@ -333,7 +336,7 @@ uint8_t resolve_color(const Loom *loom, int x, int drawdown) {
     if (drawdown) {
         return loom->warp_sett.indices[x % loom->warp_sett.length];
     } else {
-        return loom->weft_color_index;
+        return loom->weft_sett.indices[loom->pick % loom->weft_sett.length];
     }
 }
 
@@ -440,7 +443,35 @@ void randomize_threading(Loom *loom) {
     fprintf(stderr, "[pick %u] threading → %s\n", loom->pick, e->name);
 
     // Randomize warp color sett (0-15, including solid)
-    generate_sett(loom, rng_range(loom, 0, 15));
+    generate_sett(loom, &loom->warp_sett, rng_range(loom, 0, 15));
+    // If weft sett is mirroring warp, keep them in sync
+    if (loom->weft_sett_mirrored) {
+        memcpy(&loom->weft_sett, &loom->warp_sett, sizeof(ColorSett));
+    }
+}
+
+// Evolve the weft sett: mirror warp (plaid), generate independent, or cycling solid.
+void evolve_weft_sett(Loom *loom) {
+    int action = rng_range(loom, 0, 4);
+    if (action <= 1) {
+        // Mirror warp sett (true plaid/tartan)
+        memcpy(&loom->weft_sett, &loom->warp_sett, sizeof(ColorSett));
+        loom->weft_sett_mirrored = 1;
+        fprintf(stderr, "[pick %u] weft sett -> mirror warp\n", loom->pick);
+    } else if (action <= 3) {
+        // Independent sett pattern
+        int type = rng_range(loom, 0, 15);
+        generate_sett(loom, &loom->weft_sett, type);
+        loom->weft_sett_mirrored = 0;
+        fprintf(stderr, "[pick %u] weft sett -> independent (type %d)\n", loom->pick, type);
+    } else {
+        // Cycling solid — single color that steps through palette on fast timer
+        loom->weft_sett.indices[0] = rng_range(loom, 0, loom->palette_size - 1);
+        loom->weft_sett.length = 1;
+        loom->weft_sett_mirrored = 0;
+        loom->next_weft_color_change = loom->pick + rng_range(loom, 20, 80);
+        fprintf(stderr, "[pick %u] weft sett -> cycling solid\n", loom->pick);
+    }
 }
 
 // Evolve the treadling sequence (y-axis: which pedal per row).
@@ -576,18 +607,22 @@ void check_evolutions(Loom *loom) {
         loom->next_treadling_rotation = p + rng_range(loom, 50, 150);
     }
 
-    // Weft color step: cycle the horizontal thread color through the palette.
-    // Creates horizontal banding that interacts with the weave structure.
-    if (p >= loom->next_weft_color_change) {
-        // Step to next color, skipping any that match the dominant warp sett color
-        // (otherwise warp and weft become identical and the pattern disappears)
+    // Weft sett evolution: switch between mirror/independent/solid modes.
+    if (p >= loom->next_weft_sett_change) {
+        evolve_weft_sett(loom);
+        loom->next_weft_sett_change = p + rng_range(loom, 150, 400);
+    }
+
+    // Solid weft color cycling: when in solid mode, step through palette colors.
+    // Preserves the old horizontal banding behavior.
+    if (loom->weft_sett.length == 1 && p >= loom->next_weft_color_change) {
         uint8_t warp_dominant = loom->warp_sett.indices[0];
-        uint8_t next = loom->weft_color_index;
+        uint8_t next = loom->weft_sett.indices[0];
         for (int i = 0; i < loom->palette_size; i++) {
             next = (next + 1) % loom->palette_size;
             if (next != warp_dominant) break;
         }
-        loom->weft_color_index = next;
+        loom->weft_sett.indices[0] = next;
         loom->next_weft_color_change = p + rng_range(loom, 20, 80);
     }
 
