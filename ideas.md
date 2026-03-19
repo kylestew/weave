@@ -15,20 +15,16 @@ difference between "colored grid" and "that's *fabric*." Even a simple per-cell
 treatment (darken edges, lighten center based on warp-over-weft state) would
 transform the read. At 8x scale there's plenty of room for sub-cell detail.
 
-### 2. Weft sett patterns (true plaid/tartan)
+### ~~2. Weft sett patterns (true plaid/tartan)~~ DONE
 
-Right now weft is a single solid color that cycles. Real tartans use the *same*
-sett pattern on both axes. Giving the weft its own ColorSett -- and especially
-mirroring the warp sett -- would explosively increase visual complexity. The
-interplay of two color sequences through the binary drawdown creates the optical
-mixing that makes tartan fabric mesmerizing at any scale.
+Implemented: weft has its own ColorSett that evolves between three modes --
+mirror (copies warp sett for true plaid), independent (its own generated
+pattern), and cycling solid (original horizontal banding behavior).
 
-### 3. Smooth palette interpolation across transitions
+### ~~3. Smooth palette interpolation across transitions~~ DONE
 
-Currently palette changes are instant jumps. Instead, crossfade between palettes
-over 30-60 rows, interpolating RGB values. This creates gorgeous gradient bands
-where two color worlds bleed into each other -- like watching a sunset through
-cloth. The evolution would feel organic rather than stepped.
+Implemented: crossfade blending between palettes over configurable pick duration,
+with per-row RGB interpolation during transitions.
 
 ### 4. Float-length luminance variation
 
@@ -207,5 +203,4 @@ tradition it simulates.
 1. **Thread-level rendering (#1)** -- transforms the visual read from "pixel art"
    to "fabric"
 2. **Generative loom audio (#12)** -- sound is what makes people stop in a gallery
-3. **Weft sett patterns (#2)** -- doubles the color complexity with minimal code
-   change
+3. ~~**Weft sett patterns (#2)**~~ DONE
