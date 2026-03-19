@@ -11,8 +11,12 @@
 // Treadle = foot pedal — pressing one raises whichever shafts are tied to it
 #define SHAFTS       4   // number of shaft frames
 #define TREADLES     4   // number of foot pedals
+#ifndef WARP_ENDS
 #define WARP_ENDS    64  // number of vertical warp threads (= grid columns)
+#endif
+#ifndef VISIBLE_ROWS
 #define VISIBLE_ROWS 64  // rows of fabric visible on screen
+#endif
 #define MAX_SEQUENCE 32  // max treadling sequence length
 #define MAX_SETT     16  // max warp color sett repeat length
 #define MAX_PALETTE  8   // max colors in a palette
