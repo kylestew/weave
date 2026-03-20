@@ -18,14 +18,14 @@
 static void render_grid(const Loom *loom, uint8_t *pixels, int tex_w,
                         int x_offset, int y_offset) {
     for (int y = 0; y < VISIBLE_ROWS; y++) {
-        int src_row = (loom->grid_head + y) % VISIBLE_ROWS;
+        int src_row = (loom->grid_head + VISIBLE_ROWS - 1 - y) % VISIBLE_ROWS;
 
         // Resolve the palette for this row (blend-aware).
-        // y=0 is oldest (top), y=VISIBLE_ROWS-1 is newest (bottom).
+        // y=0 is newest (top), y=VISIBLE_ROWS-1 is oldest (bottom).
         const Color *row_pal = loom->palette;
         Color blended[MAX_PALETTE];
         if (loom->blend_duration > 0) {
-            uint32_t row_pick = loom->pick - (uint32_t)(VISIBLE_ROWS - y);
+            uint32_t row_pick = loom->pick - 1 - (uint32_t)y;
             int32_t offset = (int32_t)(row_pick - loom->blend_start_pick);
 
             if (offset < 0) {
@@ -69,11 +69,24 @@ static void render_grid(const Loom *loom, uint8_t *pixels, int tex_w,
 static void render_debug(const Loom *loom, uint8_t *pixels, int tex_w) {
     Color on  = {255, 255, 255};
     Color off = {40, 40, 40};
+    Color hi  = {255, 180, 0};
+    Color dim = {100, 80, 20};
+
+    // Compute the active treadle for the current (next) pick
+    int cur_seq = (int)(loom->pick % (uint32_t)loom->treadling.length);
+    if (loom->treadling.direction < 0)
+        cur_seq = loom->treadling.length - 1 - cur_seq;
+    int active_treadle = loom->treadling.sequence[cur_seq];
 
     // Threading: top 4 rows, shifted right by DEBUG_MARGIN
+    // Highlight warp ends whose shaft is raised by the active treadle
     for (int shaft_row = 0; shaft_row < SHAFTS; shaft_row++) {
         for (int x = 0; x < WARP_ENDS; x++) {
-            Color c = (loom->threading.shaft[x] == (SHAFTS - 1 - shaft_row)) ? on : off;
+            int shaft = SHAFTS - 1 - shaft_row;
+            int is_on = (loom->threading.shaft[x] == shaft);
+            int is_raised = loom->tieup.matrix[active_treadle][shaft];
+            Color c = is_on ? (is_raised ? hi : on)
+                            : (is_raised ? dim : off);
             int px = DEBUG_MARGIN + x;
             int py = shaft_row;
             int idx = (py * tex_w + px) * 3;
@@ -82,9 +95,13 @@ static void render_debug(const Loom *loom, uint8_t *pixels, int tex_w) {
     }
 
     // Tie-up: top-left corner, 4×4
+    // Highlight the row for the active treadle
     for (int t = 0; t < TREADLES; t++) {
         for (int s = 0; s < SHAFTS; s++) {
-            Color c = loom->tieup.matrix[t][SHAFTS - 1 - s] ? on : off;
+            int is_on = loom->tieup.matrix[t][SHAFTS - 1 - s];
+            Color c = (t == active_treadle)
+                ? (is_on ? hi : dim)
+                : (is_on ? on : off);
             int px = t;
             int py = s;
             int idx = (py * tex_w + px) * 3;
@@ -94,13 +111,15 @@ static void render_debug(const Loom *loom, uint8_t *pixels, int tex_w) {
 
     // Treadling: left side, 4 columns × 64 rows
     for (int y = 0; y < VISIBLE_ROWS; y++) {
-        uint32_t row_pick = loom->pick - VISIBLE_ROWS + (uint32_t)y;
+        uint32_t row_pick = loom->pick - 1 - (uint32_t)y;
         int seq_pos = (int)(row_pick % (uint32_t)loom->treadling.length);
         if (loom->treadling.direction < 0)
             seq_pos = loom->treadling.length - 1 - seq_pos;
-        int active_treadle = loom->treadling.sequence[seq_pos];
+        int row_active = loom->treadling.sequence[seq_pos];
         for (int t = 0; t < TREADLES; t++) {
-            Color c = (t == active_treadle) ? on : off;
+            Color c = (y == 0)
+                ? ((t == row_active) ? hi : dim)
+                : ((t == row_active) ? on : off);
             int px = t;
             int py = SHAFTS + y;
             int idx = (py * tex_w + px) * 3;
@@ -212,23 +231,22 @@ static void render_gutter(const Loom *loom, uint8_t *pixels, int tex_w) {
     Color text_color = {160, 160, 160};
     int line_y = gutter_y + 2;  // 2px top padding
 
-    // Line 1: threading name
-    render_text(pixels, tex_w, 1, line_y, loom->threading_name, text_color);
+    char line[64];
 
-    // Line 2: treadling name (+ direction indicator)
-    render_text(pixels, tex_w, 1, line_y + 6, loom->treadling_name, text_color);
-    if (loom->treadling.direction < 0) {
-        int name_end = 1 + (int)strlen(loom->treadling_name) * 4;
-        render_text(pixels, tex_w, name_end, line_y + 6, "REV", text_color);
-    }
+    snprintf(line, sizeof(line), "TH: %s", loom->threading_name);
+    render_text(pixels, tex_w, 1, line_y, line, text_color);
 
-    // Line 3: tie-up name
-    render_text(pixels, tex_w, 1, line_y + 12, loom->tieup_name, text_color);
+    snprintf(line, sizeof(line), "TR: %s%s", loom->treadling_name,
+             loom->treadling.direction < 0 ? " REV" : "");
+    render_text(pixels, tex_w, 1, line_y + 6, line, text_color);
 
-    // Line 4: weft sett mode
-    const char *weft_label = loom->weft_sett_mirrored ? "WEFT: MIRROR"
-        : loom->weft_sett.length == 1 ? "WEFT: CYCLE" : "WEFT: INDEP";
-    render_text(pixels, tex_w, 1, line_y + 18, weft_label, text_color);
+    snprintf(line, sizeof(line), "TU: %s", loom->tieup_name);
+    render_text(pixels, tex_w, 1, line_y + 12, line, text_color);
+
+    const char *mode = loom->weft_sett_mirrored ? "MIRROR"
+        : loom->weft_sett.length == 1 ? "CYCLE" : "INDEP";
+    snprintf(line, sizeof(line), "WF: %s", mode);
+    render_text(pixels, tex_w, 1, line_y + 18, line, text_color);
 }
 
 int main(void) {
@@ -259,6 +277,7 @@ int main(void) {
     fprintf(stderr, "  W         force weft sett change\n");
     fprintf(stderr, "  C         cycle palette\n");
     fprintf(stderr, "  F         toggle crossfade\n");
+    fprintf(stderr, "  S         single step (when paused)\n");
     fprintf(stderr, "  D         toggle debug overlay\n");
     fprintf(stderr, "  Esc/Q     quit\n");
     fprintf(stderr, "palette: %s\n", PALETTE_LIBRARY[loom.current_palette_index].name);
@@ -318,6 +337,12 @@ int main(void) {
                     case SDLK_w:
                         evolve_weft_sett(&loom);
                         break;
+                    case SDLK_s:
+                        if (loom.paused) {
+                            advance_loom(&loom);
+                            check_evolutions(&loom);
+                        }
+                        break;
                     case SDLK_d:
                         show_debug = !show_debug;
                         if (show_debug)
@@ -355,7 +380,7 @@ int main(void) {
         {
             char title[128];
             snprintf(title, sizeof(title), "Weave — pick %u | %s",
-                     loom.pick, loom.paused ? "PAUSED" : "running");
+                     loom.pick, loom.paused ? "PAUSED (S to step)" : "running");
             SDL_SetWindowTitle(window, title);
         }
 
